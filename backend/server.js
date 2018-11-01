@@ -23,9 +23,11 @@ mongoose.Promise = Promise
 mongoose.connection.on("error", err => console.error("Connection error:", err))
 mongoose.connection.once("open", () => console.log("Connected to mongodb"))
 
-//
-// Define a model here.
-//
+const User = mongoose.model("User", {
+  name: String,
+  email: String,
+  password: String
+})
 
 // Example root endpoint to get started with
 app.get("/", (req, res) => {
@@ -38,6 +40,28 @@ app.get("/", (req, res) => {
   res.send(`Signup form api. Here's an example of an encrypted password: ${hash}`)
 })
 
-// Add more endpoints here!
+app.get("/users", (req, res) => {
+  User.find().then(users => {
+    res.json(users)
+  })
+})
+
+app.post("/users", (req, res) => {
+  const password = "supersecretpassword"
+  const hash = bcrypt.hashSync(password)
+  const newUser = new User({
+    name: req.body.name,
+    email: req.body.email,
+    password: hash
+  })
+
+  newUser.save()
+    .then(() => {
+      res.status(201).json({ created: true })
+    })
+    .catch(err => {
+      res.status(400).json({ created: false, error: err })
+    })
+})
 
 app.listen(8080, () => console.log("Products API listening on port 8080!"))
