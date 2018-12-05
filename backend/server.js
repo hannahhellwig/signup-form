@@ -3,6 +3,7 @@ import express from "express"
 import bodyParser from "body-parser"
 import cors from "cors"
 import bcrypt from "bcrypt-nodejs"
+import uuid from "uuid/v4"
 
 // Express setup, including JSON body parsing.
 const app = express()
@@ -24,10 +25,33 @@ mongoose.connection.on("error", err => console.error("Connection error:", err))
 mongoose.connection.once("open", () => console.log("Connected to mongodb"))
 
 const User = mongoose.model("User", {
-  name: String,
+  username: {
+    type: String,
+    unique: true
+  },
   email: String,
-  password: String
+  password: {
+    type: String,
+    required: true,
+    minlenght: 6
+  },
+  accessToken: {
+    type: String,
+    default: () => uuid()
+  }
 })
+
+const authenticateUser = (req, res, next) => {
+  User.findById(req.params.id)
+    .then(user => {
+      if (user.accessToken === req.headers.accesstoken) {
+        next()
+      } else {
+        // user is not logged in
+        res.status(401).json({ loggedOut: true })
+      }
+    })
+}
 
 // Example root endpoint to get started with
 app.get("/", (req, res) => {
@@ -46,11 +70,23 @@ app.get("/users", (req, res) => {
   })
 })
 
+app.get("/users/:id", (req, res) => {
+  res.json({
+    requestingUserId: req.params.id
+  })
+})
+
+app.use("/users/:id", authenticateUser)
+app.get("/users/:id/movies", (req, res) => {
+  // find movies
+  res.json({ movies: [] })
+})
+
 app.post("/users", (req, res) => {
   const password = "supersecretpassword"
   const hash = bcrypt.hashSync(password)
   const newUser = new User({
-    name: req.body.name,
+    username: req.body.username,
     email: req.body.email,
     password: hash
   })
@@ -61,6 +97,20 @@ app.post("/users", (req, res) => {
     })
     .catch(err => {
       res.status(400).json({ created: false, error: err })
+    })
+})
+
+app.post("/sessions", (req, res) => {
+  User.findOne({ name: req.body.name })
+    .then(user => {
+      if (user && bcrypt.compareSync(req.body.password, user.password)) {
+        res.json({ userId: user._id, accessToken: user.accessToken })
+      } else {
+        res.json({ notFound: true })
+      }
+    })
+    .catch(err => {
+      res.json(err)
     })
 })
 
